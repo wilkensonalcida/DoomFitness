@@ -3,7 +3,9 @@
   "name": "DoomFitness Blocker",
   "version": "1.0",
   "description": "Scroll too long and you have to do squats to get back in. Posture > dopamine.",
-  "permissions": ["tabs", "storage"],
+
+  "permissions": ["camera", "activeTab", "storage"],
+
   "host_permissions": [
     "*://*.tiktok.com/*",
     "*://*.instagram.com/*",
@@ -11,6 +13,7 @@
     "*://*.reddit.com/*",
     "*://*.wikipedia.org/*"
   ],
+
   "background": {
     "service_worker": "background.js"
   },
