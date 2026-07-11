@@ -1,6 +1,5 @@
 {
   "manifest_version": 3,
-
   "name": "DoomFitness Blocker",
   "version": "1.0",
   "description": "Scroll too long and you have to do squats to get back in. Posture > dopamine.",
@@ -41,10 +40,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": [
-        "lock.html",
-        "lock.js"
-      ],
+      "resources": ["lock.html", "lock.js"],
       "matches": ["<all_urls>"]
     }
   ],
