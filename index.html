@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>SquatScroll</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, system-ui, sans-serif;
+    background: #0d0d12;
+    color: #fff;
+    overflow: hidden;
+    height: 100vh;
+  }
+  /* ---------- FEED ---------- */
+  #feed {
+    height: 100vh;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+  }
+  .post {
+    height: 100vh;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+    text-align: center;
+  }
+  .post h2 { font-size: 28px; margin-bottom: 12px; }
+  .post p { color: #aaa; }
+  .emoji { font-size: 72px; margin-bottom: 20px; }
+
+  /* ---------- LOCK OVERLAY ---------- */
+  #lockOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 15, 0.92);
+    backdrop-filter: blur(6px);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    z-index: 50;
+    padding-top: 40px;
+  }
+  #lockOverlay.active { display: flex; }
+
+  #lockOverlay h1 {
+    font-size: 22px;
+    margin-bottom: 4px;
+  }
+  #lockOverlay .sub {
+    color: #999;
+    margin-bottom: 18px;
+    font-size: 14px;
+  }
+
+  #camWrap {
+    position: relative;
+    width: 90vw;
+    max-width: 420px;
+    aspect-ratio: 3 / 4;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #000;
+    border: 2px solid #333;
+  }
+  video, canvas#overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* mirror, feels natural */
+  }
+
+  #repCounter {
+    margin-top: 20px;
+    text-align: center;
+  }
+  #repCount {
+    font-size: 56px;
+    font-weight: 800;
+    color: #4ade80;
+  }
+  #repGoal { color: #777; font-size: 14px; }
+
+  #stateLabel {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #666;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  #startBtn, #skipBtn {
+    margin-top: 22px;
+    padding: 12px 28px;
+    border-radius: 999px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  #startBtn {
+    background: #4ade80;
+    color: #06240f;
+  }
+  #skipBtn {
+    background: transparent;
+    color: #555;
+    text-decoration: underline;
+    margin-top: 10px;
+  }
+
+  #streak {
+    position: fixed;
+    top: 14px;
+    right: 16px;
+    background: rgba(255,255,255,0.08);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+  <div id="streak">🔥 <span id="streakCount">0</span> unlocks</div>
+
+  <!-- ============ FEED (fake doomscroll content) ============ -->
+  <div id="feed"></div>
+
+  <!-- ============ LOCK OVERLAY (exercise gate) ============ -->
+  <div id="lockOverlay">
+    <h1>Feed locked 🔒</h1>
+    <div class="sub">Do <span id="repGoalTop">5</span> squats to keep scrolling</div>
+
+    <div id="camWrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+    </div>
+
+    <div id="repCounter">
+      <div id="repCount">0</div>
+      <div id="repGoal">/ 5 squats</div>
+      <div id="stateLabel">waiting for camera...</div>
+    </div>
+
+    <button id="startBtn">Start Camera</button>
+    <button id="skipBtn">(dev) skip lock</button>
+  </div>
+
+  <!-- ============ LIBRARIES (CDN, no npm install needed) ============ -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+
+  <script>
+  /* ============================================================
+     CONFIG — tweak these numbers to change difficulty/behavior
+     ============================================================ */
+  const POSTS_BEFORE_LOCK = 4;      // how many posts you can scroll before it locks
+  const REPS_TO_UNLOCK   = 5;       // squats required to unlock
+  const UNLOCK_GRACE_POSTS = 4;     // how many free posts you get after unlocking
+
+  /* ============================================================
+     1. BUILD THE FAKE FEED
+     ============================================================ */
+  const mockPosts = [
+    { emoji: "🐶", title: "Dog steals owner's sandwich", sub: "2.3M likes" },
+    { emoji: "🍜", title: "Ramen but it's actually soup", sub: "890K likes" },
+    { emoji: "😂", title: "Guy trips, plays it off perfectly", sub: "5.1M likes" },
+    { emoji: "🏠", title: "This apartment costs $400/mo??", sub: "1.2M likes" },
+    { emoji: "🎸", title: "Random busker is secretly a legend", sub: "3.4M likes" },
+    { emoji: "🐱", title: "Cat judges owner's life choices", sub: "6.7M likes" },
+    { emoji: "🍔", title: "Rating gas station food, ep. 12", sub: "440K likes" },
+    { emoji: "🚗", title: "Car nearly misses pothole, dramatic music", sub: "2.9M likes" },
+  ];
+
+  const feedEl = document.getElementById("feed");
+  function renderFeed() {
+    feedEl.innerHTML = "";
+    // repeat the mock posts a bunch so there's always more to scroll
+    for (let i = 0; i < 30; i++) {
+      const p = mockPosts[i % mockPosts.length];
+      const div = document.createElement("div");
+      div.className = "post";
+      div.innerHTML = `<div class="emoji">${p.emoji}</div><h2>${p.title}</h2><p>${p.sub}</p>`;
+      feedEl.appendChild(div);
+    }
+  }
+  renderFeed();
+
+  /* ============================================================
+     2. LOCK TRIGGER — count posts scrolled past, lock when threshold hit
+     ============================================================ */
+  let postsScrolled = 0;
+  let freePostsRemaining = POSTS_BEFORE_LOCK;
+  let locked = false;
+  let lastScrollTop = 0;
+  let streak = 0;
+
+  const lockOverlay = document.getElementById("lockOverlay");
+
+  feedEl.addEventListener("scroll", () => {
+    if (locked) return; // don't count while locked
+    const postHeight = window.innerHeight;
+    const currentPost = Math.round(feedEl.scrollTop / postHeight);
+    if (currentPost > lastScrollTop) {
+      lastScrollTop = currentPost;
+      freePostsRemaining--;
+      if (freePostsRemaining <= 0) {
+        triggerLock();
+      }
+    }
+  });
+
+  function triggerLock() {
+    locked = true;
+    lockOverlay.classList.add("active");
+    resetRepCounter();
+  }
+
+  function unlock() {
+    locked = false;
+    lockOverlay.classList.remove("active");
+    freePostsRemaining = UNLOCK_GRACE_POSTS;
+    streak++;
+    document.getElementById("streakCount").textContent = streak;
+    stopCamera();
+  }
+
+  // dev button so you can test the feed without doing squats every time
+  document.getElementById("skipBtn").addEventListener("click", unlock);
+
+  /* ============================================================
+     3. CAMERA + POSE DETECTION SETUP
+     ============================================================ */
+  const video = document.getElementById("video");
+  const canvas = document.getElementById("overlay");
+  const ctx = canvas.getContext("2d");
+  const startBtn = document.getElementById("startBtn");
+  const stateLabel = document.getElementById("stateLabel");
+
+  let detector = null;
+  let rafId = null;
+  let stream = null;
+
+  startBtn.addEventListener("click", startCamera);
+
+  async function startCamera() {
+    startBtn.disabled = true;
+    startBtn.textContent = "Loading...";
+    stateLabel.textContent = "requesting camera...";
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      });
+      video.srcObject = stream;
+      await video.play();
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      stateLabel.textContent = "loading pose model...";
+      if (!detector) {
+        await tf.setBackend("webgl");
+        await tf.ready();
+        detector = await poseDetection.createDetector(
+          poseDetection.SupportedModels.MoveNet,
+          { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+        );
+      }
+
+      startBtn.style.display = "none";
+      stateLabel.textContent = "get your hips + knees in frame";
+      detectLoop();
+    } catch (err) {
+      stateLabel.textContent = "camera error: " + err.message;
+      startBtn.disabled = false;
+      startBtn.textContent = "Try Again";
+    }
+  }
+
+  function stopCamera() {
+    if (rafId) cancelAnimationFrame(rafId);
+    if (stream) stream.getTracks().forEach((t) => t.stop());
+    startBtn.style.display = "inline-block";
+    startBtn.disabled = false;
+    startBtn.textContent = "Start Camera";
+  }
+
+  /* ============================================================
+     4. SQUAT COUNTING LOGIC
+     This is the "math not AI" part — just comparing y-coordinates.
+     In image coordinates, y increases DOWNWARD.
+     So when you squat, your hip's y-value gets bigger (moves toward knee).
+     ============================================================ */
+  let repCount = 0;
+  let squatState = "up"; // "up" or "down"
+  const CONFIDENCE_MIN = 0.3;   // ignore low-confidence keypoints
+  const SQUAT_MARGIN = 25;      // pixels — tune this live if detection feels off
+
+  function resetRepCounter() {
+    repCount = 0;
+    squatState = "up";
+    document.getElementById("repCount").textContent = "0";
+  }
+
+  async function detectLoop() {
+    if (!locked) return; // stop looping once unlocked
+
+    const poses = await detector.estimatePoses(video);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (poses.length > 0) {
+      const kp = poses[0].keypoints;
+      drawSkeleton(kp);
+      checkSquat(kp);
+    } else {
+      stateLabel.textContent = "no person detected";
+    }
+
+    rafId = requestAnimationFrame(detectLoop);
+  }
+
+  function getPoint(keypoints, name) {
+    const pt = keypoints.find((k) => k.name === name);
+    if (!pt || pt.score < CONFIDENCE_MIN) return null;
+    return pt;
+  }
+
+  function checkSquat(keypoints) {
+    // average left/right so it works even if one side is slightly out of frame
+    const lHip = getPoint(keypoints, "left_hip");
+    const rHip = getPoint(keypoints, "right_hip");
+    const lKnee = getPoint(keypoints, "left_knee");
+    const rKnee = getPoint(keypoints, "right_knee");
+
+    const hips = [lHip, rHip].filter(Boolean);
+    const knees = [lKnee, rKnee].filter(Boolean);
+
+    if (hips.length === 0 || knees.length === 0) {
+      stateLabel.textContent = "can't see hips/knees — step back";
+      return;
+    }
+
+    const hipY = hips.reduce((s, p) => s + p.y, 0) / hips.length;
+    const kneeY = knees.reduce((s, p) => s + p.y, 0) / knees.length;
+
+    // DOWN: hip is close to (or past) knee height
+    // UP:   hip is well above knee height
+    if (hipY > kneeY - SQUAT_MARGIN && squatState === "up") {
+      squatState = "down";
+      stateLabel.textContent = "down ↓";
+    } else if (hipY < kneeY - SQUAT_MARGIN - 40 && squatState === "down") {
+      squatState = "up";
+      stateLabel.textContent = "up ↑ — rep counted!";
+      repCount++;
+      document.getElementById("repCount").textContent = repCount;
+      if (repCount >= REPS_TO_UNLOCK) {
+        setTimeout(unlock, 400); // tiny delay so they see the final count
+      }
+    }
+  }
+
+  /* ============================================================
+     5. SKELETON DRAWING (the "wow" visual for your demo)
+     ============================================================ */
+  const CONNECTIONS = [
+    ["left_shoulder", "right_shoulder"],
+    ["left_shoulder", "left_elbow"], ["left_elbow", "left_wrist"],
+    ["right_shoulder", "right_elbow"], ["right_elbow", "right_wrist"],
+    ["left_shoulder", "left_hip"], ["right_shoulder", "right_hip"],
+    ["left_hip", "right_hip"],
+    ["left_hip", "left_knee"], ["left_knee", "left_ankle"],
+    ["right_hip", "right_knee"], ["right_knee", "right_ankle"],
+  ];
+
+  function drawSkeleton(keypoints) {
+    const byName = {};
+    keypoints.forEach((k) => (byName[k.name] = k));
+
+    ctx.strokeStyle = "#4ade80";
+    ctx.lineWidth = 3;
+    CONNECTIONS.forEach(([a, b]) => {
+      const p1 = byName[a], p2 = byName[b];
+      if (p1 && p2 && p1.score > CONFIDENCE_MIN && p2.score > CONFIDENCE_MIN) {
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+    });
+
+    ctx.fillStyle = "#4ade80";
+    keypoints.forEach((p) => {
+      if (p.score > CONFIDENCE_MIN) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    });
+  }
+  </script>
+</body>
+</html>
