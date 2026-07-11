@@ -39,14 +39,14 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["lock.html", "lock.js", "tf.min.js", "pose-detection.min.js"],
-      "matches": [
-        "*://*.tiktok.com/*",
-        "*://*.instagram.com/*",
-        "*://*.youtube.com/*",
-        "*://*.reddit.com/*",
-        "*://*.wikipedia.org/*"
-      ]
+      "resources": [
+        "lock.html",
+        "lock.js",
+        "tf.min.js",
+        "pose-detection.min.js",
+        "movenet/model.json"
+      ],
+      "matches": ["<all_urls>"]
     }
   ]
 }
