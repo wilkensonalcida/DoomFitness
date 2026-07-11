@@ -11,7 +11,7 @@
     "*://*.instagram.com/*",
     "*://*.youtube.com/*",
     "*://*.reddit.com/*",
-    "*://*.wikipedia.com/*"
+    "*://*.wikipedia.org/*"
   ],
 
   "background": {
@@ -30,7 +30,7 @@
         "*://*.instagram.com/*",
         "*://*.youtube.com/*",
         "*://*.reddit.com/*",
-        "*://*.wikipedia.com/*"
+        "*://*.wikipedia.org/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
@@ -45,7 +45,7 @@
         "*://*.instagram.com/*",
         "*://*.youtube.com/*",
         "*://*.reddit.com/*",
-        "*://*.wikipedia.com/*"
+        "*://*.wikipedia.org/*"
       ]
     }
   ]
