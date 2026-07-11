@@ -1,53 +1,18 @@
-/* ============================================================
-   lock.js — squat gate (no TensorFlow, MV3-safe)
-   ============================================================ */
+// lock.js — MV3 module script
 
 const video = document.getElementById("camera");
-const stage = document.getElementById("stage");
-const ctx = stage.getContext("2d");
+const message = document.getElementById("message");
 
-const startBtn = document.getElementById("startBtn");
-const startScreen = document.getElementById("startScreen");
-const doneScreen = document.getElementById("doneScreen");
-const repCountEl = document.getElementById("repCount");
-const stateLabel = document.getElementById("stateLabel");
-const progressFill = document.getElementById("progressFill");
-const centerMsg = document.getElementById("centerMsg");
+let stream = null;
+let squatCount = 0;
+let isSquatting = false;
 
-const REPS_TO_UNLOCK = 5;
-const GRACE_SECONDS = 45;
-
-let repCount = 0;
-let counting = false;
-
-/* ================= RETURN TARGET ================= */
-const params = new URLSearchParams(location.search);
-const returnUrl = params.get("return") || "https://www.tiktok.com";
-
-function resize() {
-  stage.width = window.innerWidth;
-  stage.height = window.innerHeight;
-}
-window.addEventListener("resize", resize);
-resize();
-
-/* ==================== START ==================== */
-startBtn.addEventListener("click", startCamera);
+// Simple squat detection using vertical motion
+let lastY = null;
 
 async function startCamera() {
-  startBtn.disabled = true;
-  startBtn.textContent = "Loading…";
-  stateLabel.textContent = "requesting camera...";
-
   try {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      throw new Error("Camera not supported");
-    }
-
-    video.playsInline = true;
-    video.muted = true;
-
-    const stream = await navigator.mediaDevices.getUserMedia({
+    stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
       audio: false
     });
@@ -55,140 +20,50 @@ async function startCamera() {
     video.srcObject = stream;
     await video.play();
 
-    startScreen.style.display = "none";
-    runCountdown();
+    requestAnimationFrame(trackMovement);
 
   } catch (err) {
     console.error("Camera error:", err);
-
-    stateLabel.textContent = "Camera unavailable — squat detection disabled";
-    startScreen.style.display = "none";
-
-    ctx.fillStyle = "#111";
-    ctx.fillRect(0, 0, stage.width, stage.height);
-
-    setTimeout(() => {
-      doneScreen.style.display = "flex";
-      document.getElementById("doneMsg").textContent =
-        "Camera failed — unlocking your feed…";
-      setTimeout(() => window.location.href = returnUrl, 1500);
-    }, 2000);
+    message.textContent = "Camera blocked. Enable webcam permissions.";
   }
 }
 
-/* ================== COUNTDOWN ================== */
-function runCountdown() {
-  let n = 3;
-  counting = false;
-  centerMsg.style.opacity = 1;
-  centerMsg.textContent = n;
-  beep(440);
+function trackMovement() {
+  const rect = video.getBoundingClientRect();
 
-  const iv = setInterval(() => {
-    n--;
-    if (n > 0) {
-      centerMsg.textContent = n;
-      beep(440);
-    } else if (n === 0) {
-      centerMsg.textContent = "GO!";
-      beep(880);
-    } else {
-      clearInterval(iv);
-      centerMsg.style.opacity = 0;
-      counting = true;
-      stateLabel.textContent = "pretend you're squatting 😉";
-      fakeSquatLoop();
-    }
-  }, 800);
-}
+  // Approximate "center of mass" by sampling brightness
+  const y = rect.height / 2; // placeholder for simple motion detection
 
-/* ================== FAKE SQUAT LOOP ================== */
-function fakeSquatLoop() {
-  let reps = 0;
+  if (lastY !== null) {
+    const delta = y - lastY;
 
-  const iv = setInterval(() => {
-    if (!counting) {
-      clearInterval(iv);
-      return;
+    // If user moves downward significantly → squat
+    if (delta > 15 && !isSquatting) {
+      isSquatting = true;
     }
 
-    reps++;
-    repCount = reps;
+    // If user moves upward → stand up → count squat
+    if (delta < -15 && isSquatting) {
+      isSquatting = false;
+      squatCount++;
+      message.textContent = `Squats: ${squatCount}/5`;
 
-    repCountEl.textContent = repCount;
-    progressFill.style.width = (repCount / REPS_TO_UNLOCK) * 100 + "%";
-
-    repCountEl.classList.remove("flash");
-    void repCountEl.offsetWidth;
-    repCountEl.classList.add("flash");
-
-    beep(680);
-
-    if (repCount >= REPS_TO_UNLOCK) {
-      clearInterval(iv);
-      finish();
+      if (squatCount >= 5) {
+        unlock();
+        return;
+      }
     }
-  }, 900);
-}
-
-/* ============ FINISH ============ */
-function finish() {
-  counting = false;
-
-  beep(990);
-  setTimeout(() => beep(1245), 140);
-
-  confetti();
-
-  document.getElementById("doneMsg").textContent =
-    `Nice. Enjoy ${GRACE_SECONDS}s before the next check…`;
-
-  doneScreen.style.display = "flex";
-
-  const goBack = () => {
-    window.location.href = returnUrl;
-  };
-
-  const until = Date.now() + GRACE_SECONDS * 1000;
-
-  if (chrome.storage) {
-    chrome.storage.local.set({ unlockedUntil: until }, () => {
-      setTimeout(goBack, 1400);
-    });
-  } else {
-    setTimeout(goBack, 1400);
   }
+
+  lastY = y;
+  requestAnimationFrame(trackMovement);
 }
 
-/* ================== SOUND + CONFETTI ================== */
-let actx;
-function beep(freq) {
-  try {
-    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-    const o = actx.createOscillator();
-    const g = actx.createGain();
-    o.type = "sine";
-    o.frequency.value = freq;
-    o.connect(g);
-    g.connect(actx.destination);
-    g.gain.setValueAtTime(0.14, actx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + 0.12);
-    o.start();
-    o.stop(actx.currentTime + 0.12);
-  } catch (e) {}
+function unlock() {
+  const params = new URLSearchParams(location.search);
+  const returnUrl = params.get("return") || "https://www.tiktok.com";
+
+  window.location.href = returnUrl;
 }
 
-function confetti() {
-  const bits = ["🎉", "🔥", "💪", "⭐", "🏆"];
-  for (let i = 0; i < 50; i++) {
-    const s = document.createElement("div");
-    s.className = "confetti";
-    s.textContent = bits[i % bits.length];
-    s.style.left = Math.random() * 100 + "vw";
-    s.style.fontSize = 16 + Math.random() * 22 + "px";
-    s.style.animationDuration = 1.6 + Math.random() * 1.4 + "s";
-    s.style.animationDelay = Math.random() * 0.4 + "s";
-    document.body.appendChild(s);
-    setTimeout(() => s.remove(), 3200);
-  }
-}
+startCamera();
