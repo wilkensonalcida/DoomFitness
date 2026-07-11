@@ -2,14 +2,17 @@
   "manifest_version": 3,
 
   "icons": {
-  "16": "logo.png",
-  "48": "logo.png",
-  "128": "logo.png"
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
   },
+
   "name": "DoomFitness Blocker",
   "version": "1.0",
   "description": "Scroll too long and you have to do squats to get back in. Posture > dopamine.",
+
   "permissions": ["tabs", "storage"],
+
   "host_permissions": [
     "*://*.tiktok.com/*",
     "*://*.instagram.com/*",
@@ -17,9 +20,11 @@
     "*://*.reddit.com/*",
     "*://*.wikipedia.org/*"
   ],
+
   "background": {
     "service_worker": "background.js"
   },
+
   "content_scripts": [
     {
       "matches": [
@@ -33,9 +38,15 @@
       "run_at": "document_idle"
     }
   ],
+
   "web_accessible_resources": [
     {
-      "resources": ["lock.html", "lock.js", "tf.min.js", "pose-detection.min.js"],
+      "resources": [
+        "lock.html",
+        "lock.js",
+        "tf.min.js",
+        "pose-detection.min.js"
+      ],
       "matches": [
         "*://*.tiktok.com/*",
         "*://*.instagram.com/*",
@@ -45,12 +56,14 @@
       ]
     }
   ],
-  "action": {
-  "default_title": "DoomFitness",
-  "default_icon": {
-    "16": "logo.png",
-    "48": "logo.png"
-  }
 
-}
+  "action": {
+    "default_title": "DoomFitness",
+    "default_icon": {
+      "16": "logo.png",
+      "48": "logo.png",
+      "128": "logo.png"
+    },
+    "default_popup": "popup.html"
+  }
 }
