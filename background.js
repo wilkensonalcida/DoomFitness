@@ -17,11 +17,14 @@
    never blocked there.
    ============================================================ */
 
+// background.js — opens the lock screen in a new tab
+
 chrome.runtime.onMessage.addListener((msg, sender) => {
-  if (msg && msg.type === "LIMIT_REACHED" && sender.tab) {
-    const returnUrl = msg.url || sender.tab.url || "";
-    const lockUrl =
-      chrome.runtime.getURL("lock.html") + "?return=" + encodeURIComponent(returnUrl);
-    chrome.tabs.update(sender.tab.id, { url: lockUrl });
+  if (msg && msg.type === "OPEN_LOCK") {
+    const returnUrl = msg.url || (sender && sender.tab && sender.tab.url) || "https://www.tiktok.com";
+
+    chrome.tabs.create({
+      url: chrome.runtime.getURL("lock.html") + "?return=" + encodeURIComponent(returnUrl)
+    });
   }
 });
