@@ -4,7 +4,7 @@
   "version": "1.0",
   "description": "Scroll too long and you have to do squats to get back in. Posture > dopamine.",
 
-  "permissions": ["camera", "activeTab", "storage"],
+  "permissions": ["activeTab", "storage"],
 
   "host_permissions": [
     "*://*.tiktok.com/*",
