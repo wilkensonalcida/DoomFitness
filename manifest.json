@@ -1,5 +1,10 @@
 {
   "manifest_version": 3,
+  "icons":{
+    "16": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
   "name": "DoomFitness Blocker",
   "version": "1.0",
   "description": "Scroll too long and you have to do squats to get back in. Posture > dopamine.",
@@ -51,6 +56,10 @@
     }
   ],
   "action": {
-    "default_title": "DoomFitness"
+    "default_title": "DoomFitness", 
+    "default_icon":{
+      "16": "logo.png",
+      "48": "logo.png"
+    }
   }
 }
