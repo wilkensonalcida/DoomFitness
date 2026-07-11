@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "DoomFitness Blocker",
+  "version": "1.0",
+  "description": "Scroll too long and you have to do squats to get back in. Posture > dopamine.",
+  "permissions": [
+    "tabs", 
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.tiktok.com/*",
+    "*://*.instagram.com/*",
+    "*://*.youtube.com/*",
+    "*://*.reddit.com/*",
+    "*://*.wikipedia.org/*",
+    "https://tfhub.dev/*",
+    "https://storage.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.tiktok.com/*",
+        "*://*.instagram.com/*",
+        "*://*.youtube.com/*",
+        "*://*.reddit.com/*",
+        "*://*.wikipedia.org/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "setup.js",
+        "lock.html", 
+        "lock.js", 
+        "tf.min.js", 
+        "pose-detection.min.js"
+      ],
+      "matches": [
+        "*://*.tiktok.com/*",
+        "*://*.instagram.com/*",
+        "*://*.youtube.com/*",
+        "*://*.reddit.com/*",
+        "*://*.wikipedia.org/*"
+      ]
+    }
+  ],
+  "action": {
+    "default_title": "DoomFitness"
+  }
+}
