@@ -9,7 +9,7 @@
   "version": "1.0",
   "description": "Scroll too long and you have to do squats to get back in. Posture > dopamine.",
   "permissions": [
-    "tabs", 
+    "tabs",
     "storage"
   ],
   "host_permissions": [
@@ -17,7 +17,8 @@
     "*://*.instagram.com/*",
     "*://*.youtube.com/*",
     "*://*.reddit.com/*",
-    "*://*.wikipedia.org/*",
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
     "https://tfhub.dev/*",
     "https://storage.googleapis.com/*"
   ],
@@ -31,7 +32,8 @@
         "*://*.instagram.com/*",
         "*://*.youtube.com/*",
         "*://*.reddit.com/*",
-        "*://*.wikipedia.org/*"
+        "*://*.twitter.com/*",
+        "*://*.x.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
@@ -41,9 +43,9 @@
     {
       "resources": [
         "setup.js",
-        "lock.html", 
-        "lock.js", 
-        "tf.min.js", 
+        "lock.html",
+        "lock.js",
+        "tf.min.js",
         "pose-detection.min.js"
       ],
       "matches": [
@@ -51,12 +53,13 @@
         "*://*.instagram.com/*",
         "*://*.youtube.com/*",
         "*://*.reddit.com/*",
-        "*://*.wikipedia.org/*"
+        "*://*.twitter.com/*",
+        "*://*.x.com/*"
       ]
     }
   ],
   "action": {
-    "default_title": "DoomFitness", 
+    "default_title": "DoomFitness",
     "default_icon":{
       "16": "logo.png",
       "48": "logo.png"
