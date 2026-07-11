@@ -1,9 +1,9 @@
 /* ============================================================
    lock.js — the squat gate
 
-   Uses the IMPROVED detection we landed on earlier: hip-vs-knee gap measured in
-   SHOULDER-WIDTHS, not raw pixels. The original pixel-margin version drifted with
-   camera distance; this one holds up whether you're close to or far from the cam.
+   Detection: hip-vs-knee gap measured in SHOULDER-WIDTHS (distance-proof).
+   On success it clears the GLOBAL lock flag so the browser-wide block lifts,
+   grants a short grace window, and sends you back.
    ============================================================ */
 
 /* ===================== CONFIG ===================== */
@@ -16,13 +16,15 @@ const DEBUG    = false;       // set true to print the live gap value in the sta
 
 /* ================= RETURN TARGET ================= */
 const params = new URLSearchParams(location.search);
-const returnUrl = params.get("return") || "https://www.tiktok.com";
+const returnUrl = params.get("return") || "https://www.youtube.com";
 let siteName = "your feed";
 try {
   const h = new URL(returnUrl).hostname.replace(/^www\./, "");
   if (h.includes("tiktok")) siteName = "TikTok";
   else if (h.includes("instagram")) siteName = "Instagram";
   else if (h.includes("youtube")) siteName = "YouTube";
+  else if (h.includes("reddit")) siteName = "Reddit";
+  else if (h.includes("wikipedia")) siteName = "Wikipedia";
 } catch (e) {}
 setText("siteName", siteName.toUpperCase());
 setText("siteName2", siteName);
@@ -38,12 +40,20 @@ const startScreen = document.getElementById("startScreen");
 const doneScreen = document.getElementById("doneScreen");
 const repCountEl = document.getElementById("repCount");
 const stateLabel = document.getElementById("stateLabel");
-const progressFill = document.getElementById("progressFill");
 const centerMsg = document.getElementById("centerMsg");
+const ringFg = document.getElementById("ringFg");
+
+const SKELETON = "#7ed957";
+const RING_C = 2 * Math.PI * 52; // must match r=52 in the SVG
+function setRing(frac) {
+  if (ringFg) ringFg.style.strokeDashoffset = RING_C * (1 - Math.min(Math.max(frac, 0), 1));
+}
 
 let detector = null, stream = null, rafId = null, busy = false, currentFit = null;
 let counting = false;              // becomes true only after the 3-2-1 countdown
 let repCount = 0, squatState = "up";
+
+setRing(0);
 
 /* ==================== SIZING ==================== */
 function resize() { stage.width = window.innerWidth; stage.height = window.innerHeight; }
@@ -55,11 +65,10 @@ startBtn.addEventListener("click", startCamera);
 async function startCamera() {
   startBtn.disabled = true;
   startBtn.textContent = "Loading…";
+  const errEl = document.getElementById("startErr");
+  if (errEl) errEl.innerHTML = "";
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
+    stream = await getCamera();
     video.srcObject = stream;
     await video.play();
     resize();
@@ -75,10 +84,48 @@ async function startCamera() {
     loop();
     runCountdown();
   } catch (err) {
+    console.error("[DoomFitness] camera error:", err);
     startBtn.disabled = false;
     startBtn.textContent = "Try Again";
-    stateLabel.textContent = "camera error: " + err.message;
+    if (errEl) errEl.innerHTML = describeCamError(err);
+    stateLabel.textContent = "camera error: " + (err && err.name ? err.name : err);
   }
+}
+
+// Ask for a nice camera first; if that request can't be satisfied, fall back to
+// the barest possible one. Permission denials aren't retried (they'd just fail).
+async function getCamera() {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+  } catch (e) {
+    if (e && (e.name === "OverconstrainedError" || e.name === "NotFoundError")) {
+      return await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
+    throw e;
+  }
+}
+
+function describeCamError(err) {
+  const name = (err && err.name) ? err.name : "Error";
+  const fixes = {
+    NotAllowedError:
+      "Camera was blocked or the prompt was dismissed. On Windows, open Settings -> Privacy & security -> Camera and turn ON 'Camera access' and 'Let desktop apps access your camera'. Then click the camera icon in the address bar, set it to Allow, and press Try Again.",
+    NotReadableError:
+      "Another app is using the camera (Zoom, Teams, Meet, OBS, etc.). Close it completely, then press Try Again.",
+    NotFoundError:
+      "No camera detected. Check it's connected and enabled in Device Manager, then press Try Again.",
+    OverconstrainedError:
+      "Your camera couldn't match the requested settings. Press Try Again - it will now request any available camera.",
+    AbortError:
+      "The camera failed to start. Close other camera apps and press Try Again.",
+    SecurityError:
+      "Camera access was blocked by browser or OS security settings. Check your OS camera privacy settings, then press Try Again.",
+  };
+  const fix = fixes[name] || "Open DevTools (F12) -> Console and share the red error line.";
+  return "<b>" + name + "</b><br>" + fix;
 }
 
 /* ================== COUNTDOWN ================== */
@@ -87,20 +134,22 @@ async function startCamera() {
 function runCountdown() {
   let n = 3;
   counting = false;
-  centerMsg.style.opacity = 1;
-  centerMsg.textContent = n;
+  showCount(n, false);
   beep(440);
   const iv = setInterval(() => {
     n--;
-    if (n > 0)      { centerMsg.textContent = n; beep(440); }
-    else if (n === 0) { centerMsg.textContent = "GO!"; beep(880); }
+    if (n > 0) { showCount(n, false); beep(440); }
+    else if (n === 0) { showCount("GO", true); beep(880); }
     else {
       clearInterval(iv);
-      centerMsg.style.opacity = 0;
+      centerMsg.innerHTML = "";
       counting = true;
       stateLabel.textContent = "stand tall, then squat";
     }
   }, 800);
+}
+function showCount(txt, go) {
+  centerMsg.innerHTML = '<span class="tick' + (go ? " go" : "") + '">' + txt + "</span>";
 }
 
 /* ================== HELPERS ================== */
@@ -147,8 +196,6 @@ function checkSquat(kp) {
   const hipY  = hips.reduce((s, p) => s + p.y, 0)  / hips.length;
   const kneeY = knees.reduce((s, p) => s + p.y, 0) / knees.length;
 
-  // shoulder width = a body-scale ruler that barely changes as you squat/lean,
-  // so thresholds don't depend on how far you stand from the camera
   const lSh = getPoint(kp, "left_shoulder"), rSh = getPoint(kp, "right_shoulder");
   const lHp = getPoint(kp, "left_hip"),      rHp = getPoint(kp, "right_hip");
   let scale;
@@ -162,7 +209,7 @@ function checkSquat(kp) {
 
   if (gap < DOWN_GAP && squatState === "up") {
     squatState = "down";
-    if (!DEBUG) stateLabel.textContent = "down ↓";
+    if (!DEBUG) stateLabel.textContent = "down";
   } else if (gap > UP_GAP && squatState === "down") {
     squatState = "up";
     repCount++;
@@ -175,18 +222,18 @@ function onRep() {
   beep(680);
   repCountEl.textContent = repCount;
   repCountEl.classList.remove("flash"); void repCountEl.offsetWidth; repCountEl.classList.add("flash");
-  progressFill.style.width = Math.min(repCount / REPS_TO_UNLOCK, 1) * 100 + "%";
-  if (!DEBUG) stateLabel.textContent = "rep " + repCount + " of " + REPS_TO_UNLOCK;
+  setRing(repCount / REPS_TO_UNLOCK);
+  if (!DEBUG) stateLabel.textContent = repCount + " / " + REPS_TO_UNLOCK;
   if (repCount >= REPS_TO_UNLOCK) finish();
 }
 
-/* ============ FINISH → set grace, then send them back ============ */
+/* ============ FINISH → clear the global lock, grant grace, go back ============ */
 function finish() {
   counting = false;
   beep(990); setTimeout(() => beep(1245), 140);
   confetti();
-  document.getElementById("doneMsg").textContent =
-    `Nice. Enjoy ${GRACE_SECONDS}s before the next check…`;
+  const dm = document.getElementById("doneMsg");
+  if (dm) dm.textContent = "Nice. Enjoy " + GRACE_SECONDS + "s before the next check.";
   doneScreen.style.display = "flex";
 
   const goBack = () => {
@@ -195,11 +242,11 @@ function finish() {
   };
   const until = Date.now() + GRACE_SECONDS * 1000;
 
-  // Store the grace window so content.js won't instantly re-lock on return.
+  // Clearing `locked` lifts the browser-wide block; `unlockedUntil` is the grace.
   if (typeof chrome !== "undefined" && chrome.storage) {
-    chrome.storage.local.set({ unlockedUntil: until }, () => setTimeout(goBack, 1400));
+    chrome.storage.local.set({ locked: false, unlockedUntil: until }, () => setTimeout(goBack, 1500));
   } else {
-    setTimeout(goBack, 1400); // allows testing lock.html standalone (file://)
+    setTimeout(goBack, 1500); // allows testing lock.html standalone (file://)
   }
 }
 
@@ -215,7 +262,7 @@ const CONNECTIONS = [
 ];
 function drawSkeleton(kp) {
   const byName = {}; kp.forEach((k) => (byName[k.name] = k));
-  ctx.strokeStyle = "#4ade80"; ctx.lineWidth = 4;
+  ctx.strokeStyle = SKELETON; ctx.lineWidth = 4;
   CONNECTIONS.forEach(([a, b]) => {
     const p1 = byName[a], p2 = byName[b];
     if (p1 && p2 && p1.score > CONFIDENCE_MIN && p2.score > CONFIDENCE_MIN) {
@@ -223,7 +270,7 @@ function drawSkeleton(kp) {
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     }
   });
-  ctx.fillStyle = "#4ade80";
+  ctx.fillStyle = SKELETON;
   kp.forEach((p) => {
     if (p.score > CONFIDENCE_MIN) {
       const [x, y] = mapPt(p);
@@ -246,16 +293,17 @@ function beep(freq) {
   } catch (e) {}
 }
 function confetti() {
-  const bits = ["🎉", "🔥", "💪", "⭐", "🏆"];
-  for (let i = 0; i < 50; i++) {
+  const shades = ["#7ed957", "#a4f04a", "#b6ff6e", "#5bbf3a", "#eafce0"];
+  for (let i = 0; i < 70; i++) {
     const s = document.createElement("div");
     s.className = "confetti";
-    s.textContent = bits[i % bits.length];
     s.style.left = Math.random() * 100 + "vw";
-    s.style.fontSize = (16 + Math.random() * 22) + "px";
-    s.style.animationDuration = (1.6 + Math.random() * 1.4) + "s";
-    s.style.animationDelay = (Math.random() * 0.4) + "s";
+    s.style.width = (6 + Math.random() * 6) + "px";
+    s.style.height = (10 + Math.random() * 10) + "px";
+    s.style.background = shades[i % shades.length];
+    s.style.animationDuration = (1.6 + Math.random() * 1.6) + "s";
+    s.style.animationDelay = (Math.random() * 0.35) + "s";
     document.body.appendChild(s);
-    setTimeout(() => s.remove(), 3200);
+    setTimeout(() => s.remove(), 3400);
   }
 }
