@@ -55,11 +55,29 @@ startBtn.addEventListener("click", startCamera);
 async function startCamera() {
   startBtn.disabled = true;
   startBtn.textContent = "Loading…";
+  stateLabel.textContent = "requesting camera...";
+
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("This browser does not support camera access.");
+    }
+
+    video.playsInline = true;
+    video.muted = true;
+
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+    } catch (err) {
+      if (err.name === "OverconstrainedError") {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } else {
+        throw err;
+      }
+    }
+
     video.srcObject = stream;
     await video.play();
     resize();
@@ -75,9 +93,14 @@ async function startCamera() {
     loop();
     runCountdown();
   } catch (err) {
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      stream = null;
+    }
+
     startBtn.disabled = false;
     startBtn.textContent = "Try Again";
-    stateLabel.textContent = "camera error: " + err.message;
+    stateLabel.textContent = "camera error: " + (err.message || "unable to start camera");
   }
 }
 

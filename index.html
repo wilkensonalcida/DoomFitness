@@ -262,10 +262,26 @@
     stateLabel.textContent = "requesting camera...";
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: false,
-      });
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("This browser does not support camera access.");
+      }
+
+      video.playsInline = true;
+      video.muted = true;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false,
+        });
+      } catch (err) {
+        if (err.name === "OverconstrainedError") {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } else {
+          throw err;
+        }
+      }
+
       video.srcObject = stream;
       await video.play();
 
@@ -286,7 +302,11 @@
       stateLabel.textContent = "get your hips + knees in frame";
       detectLoop();
     } catch (err) {
-      stateLabel.textContent = "camera error: " + err.message;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        stream = null;
+      }
+      stateLabel.textContent = "camera error: " + (err.message || "unable to start camera");
       startBtn.disabled = false;
       startBtn.textContent = "Try Again";
     }
