@@ -1,11 +1,11 @@
 /* ============================================================
-   content.js  — runs on TikTok / Instagram / YouTube Shorts
+   content.js — runs on the target sites
 
-   Counts how many seconds you've actively been on the feed (paused while the
-   tab is hidden), and when you cross the limit it pings the background worker,
-   which swaps the tab for the squat gate. Running the timer here — in the page
-   — is what makes it reliable, because unlike the MV3 service worker this
-   context is never terminated out from under us.
+   Counts active seconds on the feed (paused while the tab is hidden). At the
+   limit it pings the background, which engages the GLOBAL lock. Running the
+   timer here keeps it reliable — unlike the MV3 service worker, this context is
+   never terminated out from under us. It also stands down if a lock is already
+   engaged (the background will redirect this tab to the gate).
    ============================================================ */
 (() => {
   const TIME_LIMIT_SECONDS = 15;  // DEMO value. Raise for real use (e.g. 300 = 5 min).
@@ -15,12 +15,12 @@
   let fired = false;
   let badge = null;
 
-  // After an unlock we set a grace window in storage so returning to the feed
-  // doesn't instantly re-lock. Respect it before we start counting again.
-  chrome.storage.local.get("unlockedUntil", (data) => {
+  chrome.storage.local.get(["unlockedUntil", "locked"], (data) => {
     const now = Date.now();
-    if (data && data.unlockedUntil && now < data.unlockedUntil) {
-      setTimeout(start, data.unlockedUntil - now); // start after grace expires
+    const lockedActive = data.locked && (!data.unlockedUntil || now > data.unlockedUntil);
+    if (lockedActive) return;                 // globally locked; background handles the redirect
+    if (data.unlockedUntil && now < data.unlockedUntil) {
+      setTimeout(start, data.unlockedUntil - now); // wait out the post-unlock grace
     } else {
       start();
     }
@@ -31,10 +31,11 @@
     badge = document.createElement("div");
     badge.style.cssText = [
       "position:fixed", "top:12px", "left:50%", "transform:translateX(-50%)",
-      "z-index:2147483647", "background:rgba(10,10,15,0.85)", "color:#fff",
-      "font:600 13px -apple-system,system-ui,sans-serif", "padding:6px 14px",
+      "z-index:2147483647", "background:rgba(10,13,10,0.85)", "color:#eafce0",
+      "font:600 13px -apple-system,system-ui,sans-serif", "padding:6px 15px",
       "border-radius:999px", "pointer-events:none", "backdrop-filter:blur(4px)",
-      "border:1px solid rgba(255,255,255,0.15)", "letter-spacing:0.3px"
+      "border:1px solid rgba(126,217,87,0.35)", "letter-spacing:0.3px",
+      "box-shadow:0 2px 18px rgba(0,0,0,0.4)"
     ].join(";");
     document.documentElement.appendChild(badge);
   }
@@ -42,9 +43,11 @@
   function updateBadge() {
     if (!badge) return;
     const left = Math.max(0, TIME_LIMIT_SECONDS - seconds);
-    badge.textContent = left <= 5 ? `💪 squat check in ${left}s`
-                                  : `DoomFitness watching · ${left}s`;
-    badge.style.background = left <= 5 ? "rgba(220,38,38,0.9)" : "rgba(10,10,15,0.85)";
+    const urgent = left <= 5;
+    badge.textContent = urgent ? `Squat check in ${left}s` : `DoomFitness watching · ${left}s`;
+    badge.style.background = urgent ? "#7ed957" : "rgba(10,13,10,0.85)";
+    badge.style.color = urgent ? "#08210a" : "#eafce0";
+    badge.style.borderColor = urgent ? "rgba(126,217,87,0.9)" : "rgba(126,217,87,0.35)";
   }
 
   function start() {
