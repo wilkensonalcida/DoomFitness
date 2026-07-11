@@ -7,24 +7,15 @@
    — is what makes it reliable, because unlike the MV3 service worker this
    context is never terminated out from under us.
    ============================================================ */
+// content.js — timer + trigger lock screen via background
+
 (() => {
-  const TIME_LIMIT_SECONDS = 15;  // DEMO value. Raise for real use (e.g. 300 = 5 min).
-  const SHOW_BADGE = true;        // small on-page countdown so the demo is readable
+  const TIME_LIMIT_SECONDS = 15;
+  const SHOW_BADGE = true;
 
   let seconds = 0;
   let fired = false;
   let badge = null;
-
-  // After an unlock we set a grace window in storage so returning to the feed
-  // doesn't instantly re-lock. Respect it before we start counting again.
-  chrome.storage.local.get("unlockedUntil", (data) => {
-    const now = Date.now();
-    if (data && data.unlockedUntil && now < data.unlockedUntil) {
-      setTimeout(start, data.unlockedUntil - now); // start after grace expires
-    } else {
-      start();
-    }
-  });
 
   function makeBadge() {
     if (!SHOW_BADGE) return;
@@ -47,17 +38,33 @@
     badge.style.background = left <= 5 ? "rgba(220,38,38,0.9)" : "rgba(10,10,15,0.85)";
   }
 
+  function triggerLock() {
+    chrome.runtime.sendMessage({
+      type: "OPEN_LOCK",
+      url: location.href
+    });
+  }
+
   function start() {
     makeBadge();
     updateBadge();
     setInterval(() => {
-      if (document.visibilityState !== "visible") return; // pause when tabbed away
+      if (document.visibilityState !== "visible") return;
       seconds++;
       updateBadge();
       if (seconds >= TIME_LIMIT_SECONDS && !fired) {
         fired = true;
-        chrome.runtime.sendMessage({ type: "LIMIT_REACHED", url: location.href });
+        triggerLock();
       }
     }, 1000);
   }
+
+  chrome.storage.local.get("unlockedUntil", (data) => {
+    const now = Date.now();
+    if (data && data.unlockedUntil && now < data.unlockedUntil) {
+      setTimeout(start, data.unlockedUntil - now);
+    } else {
+      start();
+    }
+  });
 })();
