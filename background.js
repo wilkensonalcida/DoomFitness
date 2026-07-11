@@ -13,7 +13,7 @@
    ============================================================ */
 
 const TARGET_HOSTS = [
-  "tiktok.com", "instagram.com", "youtube.com", "reddit.com", "wikipedia.org"
+  "tiktok.com", "instagram.com", "youtube.com", "reddit.com", "twitter.com", "x.com"
 ];
 
 function isTargetUrl(url) {
