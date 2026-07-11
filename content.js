@@ -7,6 +7,18 @@
    — is what makes it reliable, because unlike the MV3 service worker this
    context is never terminated out from under us.
    ============================================================ */
+const iframe = document.createElement("iframe");
+iframe.src = chrome.runtime.getURL("lock.html");
+iframe.style.position = "fixed";
+iframe.style.top = "0";
+iframe.style.left = "0";
+iframe.style.width = "100vw";
+iframe.style.height = "100vh";
+iframe.style.zIndex = "999999999";
+iframe.style.border = "none";
+
+document.documentElement.appendChild(iframe);
+
 (() => {
   const TIME_LIMIT_SECONDS = 15;  // DEMO value. Raise for real use (e.g. 300 = 5 min).
   const SHOW_BADGE = true;        // small on-page countdown so the demo is readable
