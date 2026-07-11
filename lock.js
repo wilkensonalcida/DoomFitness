@@ -24,7 +24,7 @@ try {
   else if (h.includes("instagram")) siteName = "Instagram";
   else if (h.includes("youtube")) siteName = "YouTube";
   else if (h.includes("reddit")) siteName = "Reddit";
-  else if (h.includes("wikipedia")) siteName = "Wikipedia";
+  else if (h.includes("twitter") || h === "x.com" || h.endsWith(".x.com")) siteName = "Twitter";
 } catch (e) {}
 setText("siteName", siteName.toUpperCase());
 setText("siteName2", siteName);
