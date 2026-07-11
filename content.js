@@ -58,6 +58,11 @@ document.documentElement.appendChild(iframe);
                                   : `DoomFitness watching · ${left}s`;
     badge.style.background = left <= 5 ? "rgba(220,38,38,0.9)" : "rgba(10,10,15,0.85)";
   }
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "SHOW_LOCK") {
+    injectLockScreen();
+  }
+});
 
   function start() {
     makeBadge();
