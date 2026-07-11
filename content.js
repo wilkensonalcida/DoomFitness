@@ -56,4 +56,22 @@
     makeBadge();
     updateBadge();
     setInterval(() => {
-      if
+      if (document.visibilityState !== "visible") return;
+      seconds++;
+      updateBadge();
+      if (seconds >= TIME_LIMIT_SECONDS && !fired) {
+        fired = true;
+        chrome.runtime.sendMessage({ type: "LIMIT_REACHED", url: location.href });
+      }
+    }, 1000);
+  }
+
+  chrome.storage.local.get("unlockedUntil", (data) => {
+    const now = Date.now();
+    if (data && data.unlockedUntil && now < data.unlockedUntil) {
+      setTimeout(start, data.unlockedUntil - now);
+    } else {
+      start();
+    }
+  });
+})();
