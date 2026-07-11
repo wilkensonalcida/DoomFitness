@@ -52,6 +52,10 @@ resize();
 
 /* ==================== START ==================== */
 startBtn.addEventListener("click", startCamera);
+window.addEventListener("load", () => {
+  startCamera();
+});
+
 async function startCamera() {
   startBtn.disabled = true;
   startBtn.textContent = "Loading…";

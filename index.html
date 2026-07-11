@@ -255,6 +255,9 @@
   let stream = null;
 
   startBtn.addEventListener("click", startCamera);
+  window.addEventListener("load", () => {
+    startCamera();
+  });
 
   async function startCamera() {
     startBtn.disabled = true;
