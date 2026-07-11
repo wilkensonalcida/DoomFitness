@@ -8,11 +8,10 @@ navigator.mediaDevices.getUserMedia({ video: true })
     console.error("Camera error:", err);
   });
 
-chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-  chrome.tabs.sendMessage(tabs[0].id, {
-    type: "CAMERA_READY",
-    data: "Camera stream started"
-  });
+cchrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+  chrome.tabs.sendMessage(tabs[0].id, { type: "SHOW_LOCK" });
+});
+
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
