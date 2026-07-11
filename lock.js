@@ -5,6 +5,13 @@
    SHOULDER-WIDTHS, not raw pixels. The original pixel-margin version drifted with
    camera distance; this one holds up whether you're close to or far from the cam.
    ============================================================ */
+const video = document.getElementById("camera");
+
+navigator.mediaDevices.getUserMedia({ video: true })
+  .then(stream => {
+    video.srcObject = stream;
+  })
+  .catch(err => console.error(err));
 
 /* ===================== CONFIG ===================== */
 const REPS_TO_UNLOCK = 5;
