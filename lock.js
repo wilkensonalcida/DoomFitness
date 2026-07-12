@@ -1,9 +1,9 @@
 /* ============================================================
-   lock.js — randomized squat / jumping-jack gate
+   lock.js — squat / jumping-jack exercise gate
 
-   Detection: hip-vs-knee gap measured in SHOULDER-WIDTHS.
-   On success it clears the GLOBAL lock flag, grants a short
-   grace window, and sends the user back to the blocked site.
+   Each time the lock opens, it randomly selects squats or
+   jumping jacks. The user may switch exercises once before
+   starting the camera.
    ============================================================ */
 
 /* ===================== CONFIG ===================== */
@@ -15,27 +15,29 @@ const CONFIDENCE_MIN = 0.3;
 const DOWN_GAP = 0.60;
 const UP_GAP = 0.82;
 
+const ARMS_UP_MARGIN = 15;
+const LEG_SPREAD_RATIO = 1.35;
+
 const DEBUG = false;
 
-// Pick one exercise every time the lock screen opens.
-const EXERCISE_TYPE =
+/* ================= EXERCISE CHOICE ================= */
+
+let exerciseType =
   Math.random() < 0.5
     ? "squat"
     : "jumping_jack";
 
-const EXERCISE_NAME =
-  EXERCISE_TYPE === "jumping_jack"
+let switchUsed = false;
+
+function getExerciseName() {
+  return exerciseType === "jumping_jack"
     ? "jumping jacks"
     : "squats";
-
-// Jumping-jack settings
-const ARMS_UP_MARGIN = 15;
-const LEG_SPREAD_RATIO = 1.35;
+}
 
 /* ================= RETURN TARGET ================= */
 
-const params =
-  new URLSearchParams(location.search);
+const params = new URLSearchParams(location.search);
 
 const returnUrl =
   params.get("return") ||
@@ -44,10 +46,9 @@ const returnUrl =
 let siteName = "your feed";
 
 try {
-  const hostname =
-    new URL(returnUrl)
-      .hostname
-      .replace(/^www\./, "");
+  const hostname = new URL(returnUrl)
+    .hostname
+    .replace(/^www\./, "");
 
   if (hostname.includes("tiktok")) {
     siteName = "TikTok";
@@ -63,12 +64,63 @@ try {
     hostname.endsWith(".x.com")
   ) {
     siteName = "Twitter";
+  } else if (hostname.includes("wikipedia")) {
+    siteName = "Wikipedia";
   }
 } catch (error) {
   console.error(
-    "Could not determine the website:",
+    "[DoomFitness] Could not read return URL:",
     error
   );
+}
+
+/* ==================== ELEMENTS ==================== */
+
+const stage =
+  document.getElementById("stage");
+
+const ctx =
+  stage.getContext("2d");
+
+const video =
+  document.getElementById("video");
+
+const startBtn =
+  document.getElementById("startBtn");
+
+const switchExerciseBtn =
+  document.getElementById("switchExerciseBtn");
+
+const startScreen =
+  document.getElementById("startScreen");
+
+const doneScreen =
+  document.getElementById("doneScreen");
+
+const repCountEl =
+  document.getElementById("repCount");
+
+const stateLabel =
+  document.getElementById("stateLabel");
+
+const centerMsg =
+  document.getElementById("centerMsg");
+
+const ringFg =
+  document.getElementById("ringFg");
+
+const exerciseHelp =
+  document.getElementById("exerciseHelp");
+
+/* ==================== UI SETUP ==================== */
+
+function setText(id, value) {
+  const element =
+    document.getElementById(id);
+
+  if (element) {
+    element.textContent = value;
+  }
 }
 
 setText(
@@ -92,81 +144,39 @@ setText(
   );
 });
 
-setText(
-  "exerciseName",
-  EXERCISE_NAME
-);
+function updateExerciseText() {
+  const exerciseName =
+    getExerciseName();
 
-setText(
-  "exerciseName2",
-  EXERCISE_NAME
-);
-
-const exerciseHelp =
-  document.getElementById(
-    "exerciseHelp"
+  setText(
+    "exerciseName",
+    exerciseName
   );
 
-if (exerciseHelp) {
-  exerciseHelp.textContent =
-    EXERCISE_TYPE ===
-    "jumping_jack"
-      ? "Stand far enough back for your full arms and legs to stay in frame."
-      : "Stand back so your hips and knees are in frame.";
-}
+  setText(
+    "exerciseName2",
+    exerciseName
+  );
 
-function setText(id, value) {
-  const element =
-    document.getElementById(id);
+  if (exerciseHelp) {
+    exerciseHelp.textContent =
+      exerciseType === "jumping_jack"
+        ? "Stand far enough back for your full arms and legs to stay in frame."
+        : "Stand back so your hips and knees are in frame.";
+  }
 
-  if (element) {
-    element.textContent = value;
+  if (
+    switchExerciseBtn &&
+    !switchUsed
+  ) {
+    switchExerciseBtn.textContent =
+      exerciseType === "jumping_jack"
+        ? "Switch to Squats"
+        : "Switch to Jumping Jacks";
   }
 }
 
-/* ==================== ELEMENTS ==================== */
-
-const stage =
-  document.getElementById("stage");
-
-const ctx =
-  stage.getContext("2d");
-
-const video =
-  document.getElementById("video");
-
-const startBtn =
-  document.getElementById("startBtn");
-
-const startScreen =
-  document.getElementById(
-    "startScreen"
-  );
-
-const doneScreen =
-  document.getElementById(
-    "doneScreen"
-  );
-
-const repCountEl =
-  document.getElementById(
-    "repCount"
-  );
-
-const stateLabel =
-  document.getElementById(
-    "stateLabel"
-  );
-
-const centerMsg =
-  document.getElementById(
-    "centerMsg"
-  );
-
-const ringFg =
-  document.getElementById(
-    "ringFg"
-  );
+updateExerciseText();
 
 /* ==================== DISPLAY ==================== */
 
@@ -182,10 +192,7 @@ function setRing(fraction) {
 
   const safeFraction =
     Math.min(
-      Math.max(
-        fraction,
-        0
-      ),
+      Math.max(fraction, 0),
       1
     );
 
@@ -227,6 +234,47 @@ window.addEventListener(
 
 resize();
 
+/* =============== ONE-TIME SWITCH =============== */
+
+if (switchExerciseBtn) {
+  switchExerciseBtn.addEventListener(
+    "click",
+    () => {
+      if (switchUsed) {
+        return;
+      }
+
+      exerciseType =
+        exerciseType === "squat"
+          ? "jumping_jack"
+          : "squat";
+
+      switchUsed = true;
+
+      repCount = 0;
+      squatState = "up";
+      jackState = "closed";
+
+      repCountEl.textContent = "0";
+      setRing(0);
+
+      updateExerciseText();
+
+      switchExerciseBtn.disabled = true;
+
+      switchExerciseBtn.textContent =
+        exerciseType === "jumping_jack"
+          ? "Switched to Jumping Jacks"
+          : "Switched to Squats";
+
+      setTimeout(() => {
+        switchExerciseBtn.style.display =
+          "none";
+      }, 700);
+    }
+  );
+}
+
 /* ==================== START ==================== */
 
 startBtn.addEventListener(
@@ -236,79 +284,75 @@ startBtn.addEventListener(
 
 async function startCamera() {
   startBtn.disabled = true;
-  startBtn.textContent =
-    "Loading…";
+  startBtn.textContent = "Loading…";
+
+  if (switchExerciseBtn) {
+    switchExerciseBtn.disabled = true;
+    switchExerciseBtn.style.display =
+      "none";
+  }
 
   const errorElement =
-    document.getElementById(
-      "startErr"
-    );
+    document.getElementById("startErr");
 
   if (errorElement) {
     errorElement.innerHTML = "";
   }
 
   try {
-    stream =
-      await getCamera();
+    stream = await getCamera();
 
-    video.srcObject =
-      stream;
+    video.srcObject = stream;
 
     await video.play();
 
     resize();
 
-    await tf.setBackend(
-      "webgl"
-    );
-
+    await tf.setBackend("webgl");
     await tf.ready();
 
     detector =
-      await poseDetection
-        .createDetector(
-          poseDetection
-            .SupportedModels
-            .MoveNet,
-          {
-            modelType:
-              poseDetection
-                .movenet
-                .modelType
-                .SINGLEPOSE_LIGHTNING
-          }
-        );
+      await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        {
+          modelType:
+            poseDetection.movenet.modelType
+              .SINGLEPOSE_LIGHTNING
+        }
+      );
 
-    startScreen.style.display =
-      "none";
+    startScreen.style.display = "none";
 
     loop();
     runCountdown();
   } catch (error) {
     console.error(
-      "[DoomFitness] camera error:",
+      "[DoomFitness] Camera error:",
       error
     );
 
     startBtn.disabled = false;
-    startBtn.textContent =
-      "Try Again";
+    startBtn.textContent = "Try Again";
+
+    if (
+      switchExerciseBtn &&
+      !switchUsed
+    ) {
+      switchExerciseBtn.disabled = false;
+      switchExerciseBtn.style.display =
+        "inline-block";
+    }
 
     if (errorElement) {
       errorElement.innerHTML =
-        describeCamError(
-          error
-        );
+        describeCamError(error);
     }
 
     stateLabel.textContent =
       "camera error: " +
       (
-        error &&
-        error.name
-          ? error.name
-          : error
+        error?.name ||
+        error
       );
   }
 }
@@ -317,8 +361,7 @@ async function startCamera() {
 
 async function getCamera() {
   try {
-    return await navigator
-      .mediaDevices
+    return await navigator.mediaDevices
       .getUserMedia({
         video: {
           facingMode: "user",
@@ -344,8 +387,7 @@ async function getCamera() {
           "NotFoundError"
       )
     ) {
-      return await navigator
-        .mediaDevices
+      return await navigator.mediaDevices
         .getUserMedia({
           video: true,
           audio: false
@@ -358,34 +400,32 @@ async function getCamera() {
 
 function describeCamError(error) {
   const name =
-    error &&
-    error.name
-      ? error.name
-      : "Error";
+    error?.name ||
+    "Error";
 
   const fixes = {
     NotAllowedError:
-      "Camera was blocked or the prompt was dismissed. Open Windows Settings, then Privacy & security, then Camera. Turn on Camera access and Let desktop apps access your camera. Then allow the camera in Chrome and press Try Again.",
+      "Camera access was blocked. Allow camera access in Chrome and Windows settings, then press Try Again.",
 
     NotReadableError:
-      "Another app may be using the camera. Close Zoom, Teams, Meet, OBS, or any other camera app, then press Try Again.",
+      "Another program may be using your camera. Close Zoom, Teams, Meet, OBS, or other camera apps, then try again.",
 
     NotFoundError:
-      "No camera was detected. Check that your camera is connected and enabled, then press Try Again.",
+      "No camera was detected. Check that your camera is connected and enabled.",
 
     OverconstrainedError:
       "Your camera could not match the requested settings. Press Try Again to use any available camera.",
 
     AbortError:
-      "The camera failed to start. Close other camera apps and press Try Again.",
+      "The camera failed to start. Close other camera apps, then try again.",
 
     SecurityError:
-      "Camera access was blocked by browser or system security settings. Check your camera privacy settings and try again."
+      "Camera access was blocked by browser or system security settings."
   };
 
   const fix =
     fixes[name] ||
-    "Open DevTools with F12, open the Console, and check the red error message.";
+    "Open DevTools with F12 and check the red Console error.";
 
   return (
     "<b>" +
@@ -420,9 +460,7 @@ function runCountdown() {
         );
 
         beep(440);
-      } else if (
-        number === 0
-      ) {
+      } else if (number === 0) {
         showCount(
           "GO",
           true
@@ -430,34 +468,24 @@ function runCountdown() {
 
         beep(880);
       } else {
-        clearInterval(
-          interval
-        );
+        clearInterval(interval);
 
         centerMsg.innerHTML = "";
 
         counting = true;
 
         stateLabel.textContent =
-          EXERCISE_TYPE ===
-          "jumping_jack"
+          exerciseType === "jumping_jack"
             ? "stand closed, then jump open"
             : "stand tall, then squat";
       }
     }, 800);
 }
 
-function showCount(
-  text,
-  go
-) {
+function showCount(text, go) {
   centerMsg.innerHTML =
     '<span class="tick' +
-    (
-      go
-        ? " go"
-        : ""
-    ) +
+    (go ? " go" : "") +
     '">' +
     text +
     "</span>";
@@ -475,15 +503,12 @@ function getPoint(
         keypoint.name === name
     );
 
-  if (
+  return (
     point &&
-    point.score >=
-      CONFIDENCE_MIN
-  ) {
-    return point;
-  }
-
-  return null;
+    point.score >= CONFIDENCE_MIN
+  )
+    ? point
+    : null;
 }
 
 function computeFit(
@@ -494,11 +519,8 @@ function computeFit(
 ) {
   const scale =
     Math.min(
-      canvasWidth /
-        videoWidth,
-
-      canvasHeight /
-        videoHeight
+      canvasWidth / videoWidth,
+      canvasHeight / videoHeight
     );
 
   const drawWidth =
@@ -508,25 +530,16 @@ function computeFit(
     videoHeight * scale;
 
   return {
-    scale: scale,
+    scale,
 
-    drawW:
-      drawWidth,
-
-    drawH:
-      drawHeight,
+    drawW: drawWidth,
+    drawH: drawHeight,
 
     offX:
-      (
-        canvasWidth -
-        drawWidth
-      ) / 2,
+      (canvasWidth - drawWidth) / 2,
 
     offY:
-      (
-        canvasHeight -
-        drawHeight
-      ) / 2
+      (canvasHeight - drawHeight) / 2
   };
 }
 
@@ -534,11 +547,11 @@ function mapPt(point) {
   return [
     currentFit.offX +
       point.x *
-        currentFit.scale,
+      currentFit.scale,
 
     currentFit.offY +
       point.y *
-        currentFit.scale
+      currentFit.scale
   ];
 }
 
@@ -546,9 +559,7 @@ function mapPt(point) {
 
 async function loop() {
   rafId =
-    requestAnimationFrame(
-      loop
-    );
+    requestAnimationFrame(loop);
 
   if (
     !detector ||
@@ -567,13 +578,12 @@ async function loop() {
 
   try {
     poses =
-      await detector
-        .estimatePoses(
-          video
-        );
+      await detector.estimatePoses(
+        video
+      );
   } catch (error) {
     console.error(
-      "Pose detection error:",
+      "[DoomFitness] Pose error:",
       error
     );
   }
@@ -607,22 +617,16 @@ async function loop() {
     const keypoints =
       poses[0].keypoints;
 
-    drawSkeleton(
-      keypoints
-    );
+    drawSkeleton(keypoints);
 
     if (counting) {
       if (
-        EXERCISE_TYPE ===
+        exerciseType ===
         "jumping_jack"
       ) {
-        checkJumpingJack(
-          keypoints
-        );
+        checkJumpingJack(keypoints);
       } else {
-        checkSquat(
-          keypoints
-        );
+        checkSquat(keypoints);
       }
     }
   } else if (counting) {
@@ -633,9 +637,7 @@ async function loop() {
 
 /* ==================== SQUAT ==================== */
 
-function checkSquat(
-  keypoints
-) {
+function checkSquat(keypoints) {
   const hips = [
     getPoint(
       keypoints,
@@ -672,20 +674,14 @@ function checkSquat(
 
   const hipY =
     hips.reduce(
-      (
-        total,
-        point
-      ) =>
+      (total, point) =>
         total + point.y,
       0
     ) / hips.length;
 
   const kneeY =
     knees.reduce(
-      (
-        total,
-        point
-      ) =>
+      (total, point) =>
         total + point.y,
       0
     ) / knees.length;
@@ -714,13 +710,13 @@ function checkSquat(
       "right_hip"
     );
 
-  let scale;
+  let bodyScale;
 
   if (
     leftShoulder &&
     rightShoulder
   ) {
-    scale =
+    bodyScale =
       Math.hypot(
         leftShoulder.x -
           rightShoulder.x,
@@ -732,7 +728,7 @@ function checkSquat(
     leftHip &&
     rightHip
   ) {
-    scale =
+    bodyScale =
       Math.hypot(
         leftHip.x -
           rightHip.x,
@@ -741,22 +737,20 @@ function checkSquat(
           rightHip.y
       );
   } else {
-    scale =
+    bodyScale =
       Math.abs(
         kneeY -
         hipY
       );
   }
 
-  if (scale < 1) {
+  if (bodyScale < 1) {
     return;
   }
 
   const gap =
-    (
-      kneeY -
-      hipY
-    ) / scale;
+    (kneeY - hipY) /
+    bodyScale;
 
   if (DEBUG) {
     stateLabel.textContent =
@@ -846,34 +840,32 @@ function checkJumpingJack(
   const armsUp =
     leftWrist.y <
       leftShoulder.y -
-        ARMS_UP_MARGIN &&
+      ARMS_UP_MARGIN &&
 
     rightWrist.y <
       rightShoulder.y -
-        ARMS_UP_MARGIN;
+      ARMS_UP_MARGIN;
 
   const shoulderWidth =
     Math.abs(
       leftShoulder.x -
-        rightShoulder.x
+      rightShoulder.x
     );
 
   const ankleWidth =
     Math.abs(
       leftAnkle.x -
-        rightAnkle.x
+      rightAnkle.x
     );
 
-  if (
-    shoulderWidth < 1
-  ) {
+  if (shoulderWidth < 1) {
     return;
   }
 
   const legsSpread =
     ankleWidth >
     shoulderWidth *
-      LEG_SPREAD_RATIO;
+    LEG_SPREAD_RATIO;
 
   const isOpen =
     armsUp &&
@@ -882,17 +874,9 @@ function checkJumpingJack(
   if (DEBUG) {
     stateLabel.textContent =
       "arms " +
-      (
-        armsUp
-          ? "up"
-          : "down"
-      ) +
+      (armsUp ? "up" : "down") +
       " · legs " +
-      (
-        legsSpread
-          ? "open"
-          : "closed"
-      ) +
+      (legsSpread ? "open" : "closed") +
       " · " +
       jackState;
   }
@@ -941,7 +925,7 @@ function onRep() {
 
   setRing(
     repCount /
-      REPS_TO_UNLOCK
+    REPS_TO_UNLOCK
   );
 
   if (!DEBUG) {
@@ -963,6 +947,10 @@ function onRep() {
 
 function finish() {
   counting = false;
+
+  if (rafId) {
+    cancelAnimationFrame(rafId);
+  }
 
   beep(990);
 
@@ -1013,8 +1001,7 @@ function finish() {
     chrome.storage.local.set(
       {
         locked: false,
-        unlockedUntil:
-          unlockedUntil
+        unlockedUntil
       },
       () => {
         setTimeout(
@@ -1114,12 +1101,10 @@ function drawSkeleton(
   ctx.lineWidth = 4;
 
   CONNECTIONS.forEach(
-    (
-      [
-        firstName,
-        secondName
-      ]
-    ) => {
+    ([
+      firstName,
+      secondName
+    ]) => {
       const firstPoint =
         byName[firstName];
 
@@ -1138,19 +1123,16 @@ function drawSkeleton(
           x1,
           y1
         ] =
-          mapPt(
-            firstPoint
-          );
+          mapPt(firstPoint);
 
         const [
           x2,
           y2
         ] =
-          mapPt(
-            secondPoint
-          );
+          mapPt(secondPoint);
 
         ctx.beginPath();
+
         ctx.moveTo(
           x1,
           y1
@@ -1179,9 +1161,7 @@ function drawSkeleton(
           x,
           y
         ] =
-          mapPt(
-            point
-          );
+          mapPt(point);
 
         ctx.beginPath();
 
@@ -1203,9 +1183,7 @@ function drawSkeleton(
 
 let audioContext;
 
-function beep(
-  frequency
-) {
+function beep(frequency) {
   try {
     audioContext =
       audioContext ||
@@ -1215,22 +1193,17 @@ function beep(
       )();
 
     const oscillator =
-      audioContext
-        .createOscillator();
+      audioContext.createOscillator();
 
     const gain =
-      audioContext
-        .createGain();
+      audioContext.createGain();
 
-    oscillator.type =
-      "sine";
+    oscillator.type = "sine";
 
     oscillator.frequency.value =
       frequency;
 
-    oscillator.connect(
-      gain
-    );
+    oscillator.connect(gain);
 
     gain.connect(
       audioContext.destination
@@ -1241,22 +1214,21 @@ function beep(
       audioContext.currentTime
     );
 
-    gain.gain
-      .exponentialRampToValueAtTime(
-        0.001,
-        audioContext.currentTime +
-          0.12
-      );
+    gain.gain.exponentialRampToValueAtTime(
+      0.001,
+      audioContext.currentTime +
+      0.12
+    );
 
     oscillator.start();
 
     oscillator.stop(
       audioContext.currentTime +
-        0.12
+      0.12
     );
   } catch (error) {
     console.error(
-      "Sound error:",
+      "[DoomFitness] Sound error:",
       error
     );
   }
@@ -1288,19 +1260,19 @@ function confetti() {
 
     piece.style.left =
       Math.random() *
-        100 +
+      100 +
       "vw";
 
     piece.style.width =
       6 +
       Math.random() *
-        6 +
+      6 +
       "px";
 
     piece.style.height =
       10 +
       Math.random() *
-        10 +
+      10 +
       "px";
 
     piece.style.background =
@@ -1312,12 +1284,12 @@ function confetti() {
     piece.style.animationDuration =
       1.6 +
       Math.random() *
-        1.6 +
+      1.6 +
       "s";
 
     piece.style.animationDelay =
       Math.random() *
-        0.35 +
+      0.35 +
       "s";
 
     document.body.appendChild(
