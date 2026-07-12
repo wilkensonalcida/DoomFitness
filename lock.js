@@ -9,7 +9,7 @@
 /* ===================== CONFIG ===================== */
 
 const REPS_TO_UNLOCK = 5;
-const GRACE_SECONDS = 45;
+const GRACE_SECONDS = 15;
 const CONFIDENCE_MIN = 0.3;
 
 const DOWN_GAP = 0.60;
