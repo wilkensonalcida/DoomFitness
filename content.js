@@ -44,7 +44,7 @@
     if (!badge) return;
     const left = Math.max(0, TIME_LIMIT_SECONDS - seconds);
     const urgent = left <= 5;
-    badge.textContent = urgent ? `Squat check in ${left}s` : `DoomFitness watching · ${left}s`;
+    badge.textContent = urgent ? `Fitness check in ${left}s` : `DoomFitness watching · ${left}s`;
     badge.style.background = urgent ? "#7ed957" : "rgba(10,13,10,0.85)";
     badge.style.color = urgent ? "#08210a" : "#eafce0";
     badge.style.borderColor = urgent ? "rgba(126,217,87,0.9)" : "rgba(126,217,87,0.35)";
