@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>DoomFitness Lock</title>
 <style>
-  /* Inline <style> is allowed on MV3 extension pages. Inline <script> is NOT —
-     that's why the logic lives in lock.js. */
+  
   :root {
     --bg: #0a0d0a;
     --accent: #7ed957;         /* brand green */
@@ -106,6 +105,18 @@
     box-shadow: 0 8px 26px rgba(126,217,87,0.32);
   }
   button:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+  #switchExerciseBtn {
+    margin-top: 10px;
+    padding: 12px 28px;
+    font-size: 15px;
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid rgba(126,217,87,0.55);
+    box-shadow: none;
+  }
+  #switchExerciseBtn:hover {
+    background: rgba(126,217,87,0.10);
+  }
   .tiny { color: #62755b; font-size: 12px; margin-top: 18px; max-width: 430px; line-height: 1.5; }
   #startErr { color: #f8b4b4; font-size: 14px; margin-top: 14px; max-width: 520px; line-height: 1.5; }
 
@@ -154,6 +165,7 @@
     <div class="big">You've been caught scrolling</div>
     <div class="muted">The only way back to <b id="siteName2">your feed</b> is <b><span id="goalText3">5</span> <span id="exerciseName2">squats</span></b>. <span id="exerciseHelp">Stand back so your hips and knees are in frame.</span></div>
     <button id="startBtn">Start Camera</button>
+    <button id="switchExerciseBtn" type="button">Switch Exercise</button>
     <div class="tiny">Runs entirely on your machine — the camera feed never leaves this device.</div>
     <div id="startErr"></div>
   </div>
